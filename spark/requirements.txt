@@ -1,0 +1,13 @@
+# Bundles the full Spark 3.5 runtime; the Dockerfile points SPARK_HOME at it.
+pyspark==3.5.2
+jupyterlab==4.2.5
+notebook==7.2.2
+# rest-sigv4 extra supplies the SigV4 signer for the Glue REST catalog.
+# The chapter's original 0.7.1 pin predates this support.
+pyiceberg[pyarrow,duckdb,pandas,rest-sigv4,glue]==0.12.0
+jupysql==0.10.5
+duckdb-engine==0.13.1
+matplotlib==3.9.2
+scipy==1.14.1
+boto3==1.35.36
+awscli-local==0.22.0

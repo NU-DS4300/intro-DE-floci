@@ -1,0 +1,11 @@
+# Local copy of .env.example; keep it out of the repo
+.env
+
+# Local agent/editor settings
+.claude/
+.vscode/
+.DS_Store
+
+# Jupyter / Python
+.ipynb_checkpoints/
+__pycache__/

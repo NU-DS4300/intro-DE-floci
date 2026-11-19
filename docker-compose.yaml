@@ -1,0 +1,74 @@
+services:
+  # The AWS emulator. Serves every AWS API this chapter uses on one port:
+  #   S3                       object storage for the data lake
+  #   Glue Data Catalog        table metadata, incl. the Iceberg REST endpoint at /iceberg
+  #   Athena                   serverless SQL over the catalog
+  #   STS                      credential / caller identity
+  floci:
+    # Pinned to a dated nightly: Glue's Iceberg REST endpoint (/iceberg) landed
+    # after 2.5.0 (floci-io/floci#8472) and no release has it yet. Switch to the
+    # first release that includes it (2.6.0 or later) once one ships.
+    image: floci/floci:nightly-11152026
+    container_name: floci
+    networks:
+      lakehouse_net:
+    ports:
+      - 4566:4566   # all AWS service APIs
+      # No 4500 here: the web console is a sidecar that Floci starts on the first
+      # visit to http://localhost:4566/_floci/ui, and Docker publishes 4500 for
+      # that sidecar. Mapping 4500 on this container takes the port first and
+      # the console fails with "port is already allocated".
+    environment:
+      # hybrid keeps catalog + bucket state across `docker compose restart`
+      # without the write amplification of `persistent`. Use `memory` to get a
+      # clean slate on every start.
+      - FLOCI_STORAGE_MODE=hybrid
+      - FLOCI_SERVICES_UI_ENABLED=true
+      - FLOCI_DEFAULT_ACCOUNT_ID=000000000000
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      # Floci starts the console and the Athena DuckDB engine as sidecar
+      # containers, so it needs to talk to the host Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+    # No healthcheck override: the image ships its own (/usr/local/bin/healthcheck.sh).
+    # The image has no curl, so a curl-based check can never pass.
+
+  # Spark 3.5 + Iceberg runtime + Jupyter + PyIceberg. This is the only piece
+  # that is not an emulated AWS service: Floci emulates control planes, not the
+  # Spark engine itself, so the query engine still runs locally. It is
+  # configured exactly as it would be against real AWS Glue.
+  spark-iceberg:
+    container_name: spark-iceberg
+    build: spark/
+    networks:
+      lakehouse_net:
+    depends_on:
+      floci:
+        condition: service_healthy
+    volumes:
+      - ./notebooks:/home/iceberg/notebooks/notebooks
+      # Sample OneShop data. Same relative path on the laptop and in a
+      # `docker exec` shell (which starts in /home/iceberg): data/users.csv
+      - ./data:/home/iceberg/data
+      # Creates the bucket and the Glue database so the notebooks have
+      # somewhere to write. Runs here because the Floci image has no AWS CLI.
+      - ./init:/opt/init:ro
+    command: ["sh", "-c", "/opt/init/01-bootstrap-lake.sh && exec /bin/notebook"]
+    environment:
+      # 12 digits, so Floci resolves this to account 000000000000 — the value
+      # the Iceberg REST catalog expects as its `warehouse`.
+      - AWS_ACCESS_KEY_ID=000000000000
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://floci:4566
+      # AWS CLI v2 pipes terminal output through `less`, which this image lacks:
+      # without this, every `aws` command in `docker exec -it` or a JupyterLab
+      # terminal fails with "Unable to redirect output to pager".
+      - AWS_PAGER=
+    ports:
+      - 8888:8888    # Jupyter
+      - 4040:4040    # Spark driver UI
+
+networks:
+  lakehouse_net:

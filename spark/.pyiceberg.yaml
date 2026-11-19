@@ -1,0 +1,15 @@
+catalog:
+  # Same Glue Iceberg REST catalog the Spark session uses, so a table created
+  # in Spark is immediately visible to PyIceberg and the pyiceberg CLI.
+  glue:
+    type: rest
+    uri: http://floci:4566/iceberg
+    warehouse: "000000000000"
+    rest.sigv4-enabled: "true"
+    rest.signing-name: glue
+    rest.signing-region: us-east-1
+    s3.endpoint: http://floci:4566
+    s3.access-key-id: "000000000000"
+    s3.secret-access-key: test
+    s3.region: us-east-1
+    s3.path-style-access: "true"
