@@ -46,12 +46,13 @@ services:
       floci:
         condition: service_healthy
     volumes:
-      - ./notebooks:/home/iceberg/notebooks/notebooks
+      # JupyterLab's root folder; notebooks you create are saved here.
+      - ./notebooks:/home/iceberg/notebooks
       # Sample OneShop data. Same relative path on the laptop and in a
       # `docker exec` shell (which starts in /home/iceberg): data/users.csv
       - ./data:/home/iceberg/data
-      # Creates the bucket and the Glue database so the notebooks have
-      # somewhere to write. Runs here because the Floci image has no AWS CLI.
+      # Creates the bucket and the Glue database so Spark has somewhere to
+      # write. Runs here because the Floci image has no AWS CLI.
       - ./init:/opt/init:ro
     command: ["sh", "-c", "/opt/init/01-bootstrap-lake.sh && exec /bin/notebook"]
     environment:

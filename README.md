@@ -35,22 +35,69 @@ Wait for Floci to report healthy (`docker compose ps`), then:
 | Jupyter Lab | http://localhost:8888 |
 | Floci resource console | http://localhost:4566/_floci/ui (first visit starts it, then redirects to `:4500`) |
 | AWS service endpoint | http://localhost:4566 |
-| Spark driver UI | http://localhost:4040 |
+| Spark driver UI | http://localhost:4040 (while a Spark session is running) |
 
-Open `notebooks/01-oneshop-lakehouse.ipynb` and run the cells top to bottom.
+In Jupyter Lab, notebooks you create are saved to `notebooks/` on your laptop.
+A `%%sql` cell runs one Spark SQL statement against the Glue catalog
+(`spark/ipython-startup.py` defines the magic). The same SQL also works in
+`docker exec -it spark-iceberg spark-sql`.
+
+## Creating the first table
+
+The bootstrap script (`init/01-bootstrap-lake.sh`) has already created the
+`warehouse` bucket and the Glue database `accounts`. Load the sample OneShop
+users (`data/users.csv`) into a partitioned Iceberg table, one statement per
+`%%sql` cell:
+
+```sql
+CREATE TABLE IF NOT EXISTS accounts.users (
+    id INT, first_name STRING, last_name STRING, email STRING
+) USING iceberg
+PARTITIONED BY (truncate(1, last_name))
+```
+
+```sql
+CREATE OR REPLACE TEMPORARY VIEW users_csv USING csv
+OPTIONS (path '/home/iceberg/data/users.csv', header 'true', inferSchema 'true')
+```
+
+```sql
+INSERT INTO accounts.users SELECT * FROM users_csv
+```
+
+`truncate(1, last_name)` is Iceberg hidden partitioning: one
+`last_name_trunc=<letter>` prefix per first letter, no extra column. Spark
+wrote the files, but Glue now holds the table; every command below sees it.
 
 ## Talking to AWS from your own shell
 
 ```bash
-export AWS_ACCESS_KEY_ID=000000000000
-export AWS_SECRET_ACCESS_KEY=test
-export AWS_DEFAULT_REGION=us-east-1
-export AWS_ENDPOINT_URL=http://localhost:4566
+set -a; . ./.env.example; set +a   # or copy it to .env and source that
 
 aws s3 ls s3://warehouse --recursive
 aws glue get-databases --query 'DatabaseList[].Name'
 aws glue get-table --database-name accounts --name users
 ```
+
+Athena queries the same table through the Glue catalog; results land in the
+`athena-results` bucket the bootstrap script created:
+
+```bash
+QID=$(aws athena start-query-execution \
+  --query-string 'SELECT last_name, email FROM users ORDER BY last_name' \
+  --query-execution-context Database=accounts \
+  --result-configuration OutputLocation=s3://athena-results/ \
+  --query QueryExecutionId --output text)
+# Athena is asynchronous: wait for the query to leave QUEUED/RUNNING.
+while aws athena get-query-execution --query-execution-id "$QID" \
+    --query QueryExecution.Status.State --output text | grep -qE 'QUEUED|RUNNING'; do
+  sleep 1
+done
+aws athena get-query-results --query-execution-id "$QID"
+```
+
+Inside the container (`docker exec -it spark-iceberg bash` or a JupyterLab
+terminal) the credentials and endpoint are already set.
 
 The PyIceberg CLI works as it does in the book:
 
@@ -105,5 +152,5 @@ docker compose down -v
 - Spark's metadata-table syntax (`glue.accounts.users.snapshots`) fails against
   Floci: Iceberg first tries `accounts.users` as a namespace, and Floci answers
   that two-level namespace with an error rather than "not found", so Spark never
-  falls back to the metadata table. The notebook reads snapshots with
-  PyIceberg's `tbl.inspect.snapshots()` instead.
+  falls back to the metadata table. Read snapshots with PyIceberg instead:
+  `load_catalog('glue').load_table('accounts.users').inspect.snapshots()`.

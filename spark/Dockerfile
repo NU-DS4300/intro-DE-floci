@@ -41,7 +41,7 @@ RUN curl -fsSL https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bun
 
 RUN echo '#! /bin/sh' >> /bin/notebook \
     && echo 'export PYSPARK_DRIVER_PYTHON=jupyter-lab' >> /bin/notebook \
-    && echo "export PYSPARK_DRIVER_PYTHON_OPTS=\"--notebook-dir=/home/iceberg/notebooks --ip='*' --NotebookApp.token='' --NotebookApp.password='' --port=8888 --no-browser --allow-root\"" >> /bin/notebook \
+    && echo "export PYSPARK_DRIVER_PYTHON_OPTS=\"--notebook-dir=/home/iceberg/notebooks --ip='*' --IdentityProvider.token='' --port=8888 --no-browser --allow-root\"" >> /bin/notebook \
     && echo "pyspark" >> /bin/notebook \
     && chmod u+x /bin/notebook
 
@@ -49,9 +49,7 @@ COPY spark-defaults.conf ${SPARK_HOME}/conf/
 COPY .pyiceberg.yaml /root/.pyiceberg.yaml
 COPY ipython-startup.py /root/.ipython/profile_default/startup/00-spark-sql.py
 
-# spark-events must exist up front: spark-defaults.conf enables the event log
-# there, and Spark refuses to start if the directory is missing.
-RUN mkdir -p /home/iceberg/notebooks /home/iceberg/spark-events
+RUN mkdir -p /home/iceberg/notebooks
 
 WORKDIR /home/iceberg
 CMD ["/bin/notebook"]
