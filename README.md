@@ -106,6 +106,36 @@ docker exec -it spark-iceberg pyiceberg --catalog glue list
 docker exec -it spark-iceberg pyiceberg --catalog glue describe --entity=table accounts.users
 ```
 
+## Spark ETL intro: hydrating bronze and silver
+
+`compose-spark-intro.yaml` adds OneShop's source systems on top of the stack
+above, without restarting Floci:
+
+```bash
+docker compose -f docker-compose.yaml -f compose-spark-intro.yaml up -d --build
+docker logs loadgen        # last line: [loadgen] done
+```
+
+| Piece | What it is |
+| --- | --- |
+| `loadgen/` | One-shot container: creates the **RDS for PostgreSQL** instance `oneshop-db` (users, items, purchases, read-only `etluser`) and the **S3** bucket `oneshop-pageviews` (hourly JSON Lines events), with mock data. Rerunning it changes nothing. |
+| `jobs/postgres_loader.py` | RDS → `bronze.users/items/purchases` over JDBC |
+| `jobs/pageviews_loader.py` | `s3a://oneshop-pageviews/` → `bronze.pageviews` |
+| `jobs/bronze_to_silver.py` | bronze → `silver.users`, `silver.items`, `silver.purchases_enriched`, `silver.pageviews_by_items` |
+
+`notebooks/oneshop-spark-intro.ipynb` walks through the whole flow: inspect
+the sources, create the namespaces and tables, run the three jobs, and check
+silver with Spark SQL, PyIceberg, and Athena.
+
+Run a job with `spark-submit /home/iceberg/jobs/<job>.py` from a notebook
+(`!spark-submit ...`) or `docker exec spark-iceberg spark-submit ...`. The
+PostgreSQL JDBC driver and the S3A connector are in the image, so no `--jars`.
+Create the `bronze`/`silver`/`gold` namespaces with a `LOCATION`
+(`CREATE DATABASE bronze LOCATION 's3://warehouse/bronze'`): Floci's Glue
+rejects `CREATE TABLE` in a database without one. The RDS instance is reachable
+only on the Docker network, at the endpoint `aws rds describe-db-instances`
+reports.
+
 ## Two things that trip people up
 
 **1. The access key is twelve digits.** Floci treats a 12-digit

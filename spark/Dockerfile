@@ -39,13 +39,25 @@ RUN curl -fsSL https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-r
 RUN curl -fsSL https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/${ICEBERG_VERSION}/iceberg-aws-bundle-${ICEBERG_VERSION}.jar \
     -o ${SPARK_HOME}/jars/iceberg-aws-bundle-${ICEBERG_VERSION}.jar
 
+# Spark ETL jobs. hadoop-aws is the S3A connector for reading raw files
+# (s3a://bucket/...) that are not Iceberg tables; 3.3.4 matches the Hadoop
+# client bundled with pyspark 3.5.2, and 1.12.262 is the AWS SDK it was built
+# against. The PostgreSQL driver lets Spark read RDS tables over JDBC. Jars in
+# $SPARK_HOME/jars load in notebooks and spark-submit alike, so no --jars.
+RUN curl -fsSL https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar \
+    -o ${SPARK_HOME}/jars/hadoop-aws-3.3.4.jar && \
+    curl -fsSL https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar \
+    -o ${SPARK_HOME}/jars/aws-java-sdk-bundle-1.12.262.jar && \
+    curl -fsSL https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.6/postgresql-42.7.6.jar \
+    -o ${SPARK_HOME}/jars/postgresql-42.7.6.jar
+
 RUN echo '#! /bin/sh' >> /bin/notebook \
     && echo 'export PYSPARK_DRIVER_PYTHON=jupyter-lab' >> /bin/notebook \
     && echo "export PYSPARK_DRIVER_PYTHON_OPTS=\"--notebook-dir=/home/iceberg/notebooks --ip='*' --IdentityProvider.token='' --port=8888 --no-browser --allow-root\"" >> /bin/notebook \
     && echo "pyspark" >> /bin/notebook \
     && chmod u+x /bin/notebook
 
-COPY spark-defaults.conf ${SPARK_HOME}/conf/
+COPY spark-defaults.conf log4j2.properties ${SPARK_HOME}/conf/
 COPY .pyiceberg.yaml /root/.pyiceberg.yaml
 COPY ipython-startup.py /root/.ipython/profile_default/startup/00-spark-sql.py
 

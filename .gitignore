@@ -9,3 +9,6 @@
 # Jupyter / Python
 .ipynb_checkpoints/
 __pycache__/
+
+# Instructor's worked solutions; keep out of the student repo
+notebooks/Fontenot*.ipynb
