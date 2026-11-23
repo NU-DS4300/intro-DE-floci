@@ -37,6 +37,10 @@ Wait for Floci to report healthy (`docker compose ps`), then:
 | AWS service endpoint | http://localhost:4566 |
 | Spark driver UI | http://localhost:4040 (while a Spark session is running) |
 
+`notebooks/oneshop-lakehouse-part2.ipynb` follows the Part 2 lecture, from S3
+through Glue, Athena, and Iceberg, with every step filled in. Run it once on a
+fresh stack.
+
 In Jupyter Lab, notebooks you create are saved to `notebooks/` on your laptop.
 A `%%sql` cell runs one Spark SQL statement against the Glue catalog
 (`spark/ipython-startup.py` defines the magic). The same SQL also works in
